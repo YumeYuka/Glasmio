@@ -413,21 +413,30 @@ fun <T> GlasmioNavigationBarWithTrailingItem(
                         itemContentDescription = trailingItem.contentDescription,
                         onBoundsChanged = { bounds -> onItemBoundsChanged?.invoke(trailingItem.key, bounds) },
                     ) {
-                        SfIcon(
-                            trailingItem.symbol,
+                        val iconModifier = Modifier.graphicsLayer {
+                            if (!detachTrailingItem) {
+                                translationY = ((sourceIconCenter.value?.y ?: size.height / 2f) -
+                                    NavigationBarSurfaceHeight.toPx() / 2f) *
+                                    (1f - compactProgress.value)
+                            }
+                        }
+                        val iconTint = LocalGlassColors.current.let {
+                            if (trailingItem.key == selectedKey) it.accent else it.content
+                        }
+                        trailingItem.iconContent?.invoke(
+                            iconModifier,
+                            CompactBottomControlIconSize,
+                            iconTint,
+                        ) ?: SfIcon(
+                            requireNotNull(trailingItem.symbol),
                             contentDescription = trailingItem.contentDescription,
-                            tint = LocalGlassColors.current.let { if (trailingItem.key == selectedKey) it.accent else it.content },
+                            tint = iconTint,
                             size = CompactBottomControlIconSize,
                             fontSize = 18.sp,
                             weight = FontWeight.Medium,
                             fontFeatureSettings = "'ss16' 1",
                             fitGlyphToBounds = false,
-                            modifier = Modifier.graphicsLayer {
-                                if (!detachTrailingItem) {
-                                    translationY = ((sourceIconCenter.value?.y ?: size.height / 2f) -
-                                        NavigationBarSurfaceHeight.toPx() / 2f) * (1f - compactProgress.value)
-                                }
-                            },
+                            modifier = iconModifier,
                         )
                     }
                 }
