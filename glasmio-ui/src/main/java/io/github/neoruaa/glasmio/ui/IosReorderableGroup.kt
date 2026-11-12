@@ -60,6 +60,7 @@ fun <T> GlasmioReorderableGroup(
     if (items.isEmpty()) return
 
     val colors = LocalGlassColors.current
+    val horizontalPadding = GlasmioListRowDefaults.horizontalPadding
     val hapticFeedback = LocalHapticFeedback.current
     val rowHeightPx = with(LocalDensity.current) { 52.dp.roundToPx() }
     var liftedIndex by remember { mutableStateOf<Int?>(null) }
@@ -115,7 +116,7 @@ fun <T> GlasmioReorderableGroup(
                 // isDragging resets before the settle animation, so hiding an item-owned
                 // divider with that flag would make it reappear in mid-flight on release.
                 val rowHeight = 52.dp.roundToPx()
-                val inset = 16.dp.toPx()
+                val inset = horizontalPadding.toPx()
                 for (index in 1 until items.size) {
                     val y = (rowHeight * index).toFloat()
                     drawLine(
@@ -134,7 +135,7 @@ fun <T> GlasmioReorderableGroup(
                         .height(52.dp)
                         .onGloballyPositioned { rowCoordinates[index] = it }
                         .background(if (isDragging || liftedIndex == index) colors.elevatedBackground else Color.Transparent)
-                        .padding(horizontal = 16.dp),
+                        .padding(horizontal = horizontalPadding),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     itemContent(item)

@@ -105,8 +105,9 @@ import kotlin.math.sign
 data class GlasmioTabItem<T>(
     val key: T,
     val label: String,
-    val symbol: SfSymbol,
+    val symbol: SfSymbol? = null,
     val contentDescription: String = label,
+    val iconContent: (@Composable (modifier: Modifier, size: Dp, tint: Color) -> Unit)? = null,
 )
 
 @androidx.compose.runtime.Immutable
@@ -221,7 +222,8 @@ private fun <T> hasNativeShortTabs(items: List<GlasmioTabItem<T>>): Boolean {
                 softWrap = false,
                 maxLines = 1,
             ).multiParagraph.intrinsics.maxIntrinsicWidth
-            val glyph = String(Character.toChars(item.symbol.codePoint))
+            val symbol = item.symbol ?: return@remember false
+            val glyph = String(Character.toChars(symbol.codePoint))
             // The advance retains the symbol's side bearings, unlike its visible ink bounds.
             maxOf(titleWidth, symbolPaint.measureText(glyph)) <= maximumIntrinsicWidth
         }
@@ -575,7 +577,7 @@ fun <T> GlasmioNavigationBar(
             platterPuff.animateTo(if (pressed) 1f else 0f,
                 if (pressed) puffPressSpring else puffReleaseSpring)
         }
-        val selectedIconColorFilterState: State<ColorFilter> = remember(
+        val selectedIconTintState: State<Color> = remember(
             compactState,
             selectionPressProgressState,
             colors.accent,
@@ -587,24 +589,19 @@ fun <T> GlasmioNavigationBar(
                     colors.content,
                     compactState.value,
                 )
-                ColorFilter.tint(
-                    androidx.compose.ui.graphics.lerp(
-                        compactTint,
-                        colors.content,
-                        selectionPressProgressState.value,
-                    ),
+                androidx.compose.ui.graphics.lerp(
+                    compactTint,
+                    colors.content,
+                    selectionPressProgressState.value,
                 )
             }
+        }
+        val selectedIconColorFilterState: State<ColorFilter> = remember(selectedIconTintState) {
+            derivedStateOf { ColorFilter.tint(selectedIconTintState.value) }
         }
         val hiddenSelectedIconColorFilterState = navigationLensSourceColorFilter(
             colors, selectedIconColorFilterState,
         )
-        val lensSourceAccentFilter = remember(colors.accent) {
-            ColorFilter.tint(colors.accent)
-        }
-        val lensSourceAccentModifier = remember(lensSourceAccentFilter) {
-            Modifier.graphicsLayer(colorFilter = lensSourceAccentFilter)
-        }
         val visibleTabContentScale = remember {
             { 1f }
         }
@@ -937,6 +934,7 @@ fun <T> GlasmioNavigationBar(
                         labelAlpha = tabContentAlpha,
                         selectedIconColorFilter = selectedIconColorFilterState,
                         contentColor = colors.content,
+                        selectedIconTintState = selectedIconTintState,
                         panelScale = selectedTabPanelScale,
                         iconAlpha = if (compactItem != null) tabContentAlpha else null,
                         onIconBoundsChanged = onItemIconBoundsChanged?.let { callback ->
@@ -984,8 +982,7 @@ fun <T> GlasmioNavigationBar(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
-                            .then(lensSourceAccentModifier),
+                            .fillMaxHeight(),
                     ) {
                         FullTabContent(
                             items = stableItems,
@@ -1249,41 +1246,65 @@ private fun <T> NavigationTabContent(
     selectedContentSource: Boolean = false,
     iconAlpha: (() -> Float)? = null,
     onIconBoundsChanged: ((Rect) -> Unit)? = null,
+    selectedIconTintState: State<Color>? = null,
 ) {
     val colors = LocalGlassColors.current
-    SfIcon(
-        symbol = item.symbol,
-        contentDescription = item.contentDescription,
-        tint = if (selected) selectedIconTint ?: colors.accent else colors.content,
-        size = ExpandedNavigationIconSize,
-        fontSize = 18.sp,
-        weight = FontWeight.Medium,
-        fontFeatureSettings = "'ss16' 1",
-        fitGlyphToBounds = false,
-        modifier = Modifier
-            .then(
-                if (labelAlpha != null) Modifier.navigationTabIconPadding(labelAlpha)
-                else Modifier.padding(top = 3.dp),
-            )
-            .then(
-                if (onIconBoundsChanged != null) Modifier.onGloballyPositioned {
-                    onIconBoundsChanged(it.boundsInWindow())
-                } else Modifier,
-            )
-            .then(
-                if (iconAlpha != null) Modifier.graphicsLayer { alpha = iconAlpha() } else Modifier,
-            )
-            .then(
-                if (selected && (selectedColorFilter != null || rasterizeBeforeScale)) {
-                    Modifier.graphicsLayer {
-                        colorFilter = selectedColorFilter?.value
-                        if (rasterizeBeforeScale) compositingStrategy = CompositingStrategy.Offscreen
-                    }
-                } else {
-                    Modifier
-                },
-            ),
-    )
+    val iconContent = item.iconContent
+    val sourceAccentModifier = if (selectedContentSource) {
+        remember(colors.accent) {
+            Modifier.graphicsLayer(colorFilter = ColorFilter.tint(colors.accent))
+        }
+    } else {
+        Modifier
+    }
+    val symbolModifier = if (iconContent == null) {
+        sourceAccentModifier.then(
+            if (selected && (selectedColorFilter != null || rasterizeBeforeScale)) {
+                Modifier.graphicsLayer {
+                    colorFilter = selectedColorFilter?.value
+                    if (rasterizeBeforeScale) compositingStrategy = CompositingStrategy.Offscreen
+                }
+            } else {
+                Modifier
+            },
+        )
+    } else {
+        Modifier
+    }
+    val iconModifier = Modifier
+        .then(
+            if (labelAlpha != null) Modifier.navigationTabIconPadding(labelAlpha)
+            else Modifier.padding(top = 3.dp),
+        )
+        .then(
+            if (onIconBoundsChanged != null) Modifier.onGloballyPositioned {
+                onIconBoundsChanged(it.boundsInWindow())
+            } else Modifier,
+        )
+        .then(
+            if (iconAlpha != null) Modifier.graphicsLayer { alpha = iconAlpha() } else Modifier,
+        )
+        .then(symbolModifier)
+    if (iconContent != null) {
+        val iconTint = when {
+            selectedContentSource -> colors.accent
+            selected -> selectedIconTintState?.value ?: selectedIconTint ?: colors.accent
+            else -> colors.content
+        }
+        iconContent(iconModifier, ExpandedNavigationIconSize, iconTint)
+    } else {
+        SfIcon(
+            symbol = requireNotNull(item.symbol),
+            contentDescription = item.contentDescription,
+            tint = if (selected) selectedIconTint ?: colors.accent else colors.content,
+            size = ExpandedNavigationIconSize,
+            fontSize = 18.sp,
+            weight = FontWeight.Medium,
+            fontFeatureSettings = "'ss16' 1",
+            fitGlyphToBounds = false,
+            modifier = iconModifier,
+        )
+    }
     Text(
         text = item.label,
         color = colors.content,
@@ -1293,6 +1314,7 @@ private fun <T> NavigationTabContent(
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .widthIn(max = labelMaxWidth)
+            .then(sourceAccentModifier)
             .then(
                 if (labelAlpha != null) {
                     Modifier.collapseVertically(labelAlpha)
@@ -1361,6 +1383,7 @@ internal fun <T> BoxScope.MorphingSelectedNavigationItem(
     selectedContentSource: Boolean = false,
     iconAlpha: (() -> Float)? = null,
     onIconBoundsChanged: ((Rect) -> Unit)? = null,
+    selectedIconTintState: State<Color>? = null,
 ) {
     val sharedTabScale = LocalLiquidTabScale.current
     val density = LocalDensity.current
@@ -1441,6 +1464,7 @@ internal fun <T> BoxScope.MorphingSelectedNavigationItem(
                 labelMaxWidth = expandedTabs.labelMaxWidth(itemCount, density),
                 selectedColorFilter = selectedIconColorFilter,
                 selectedIconTint = contentColor,
+                selectedIconTintState = selectedIconTintState,
                 labelAlpha = labelAlpha,
                 // Match the filtered path's individual raster bounds before the tab
                 // scales, even when the opaque parent makes both inner tints redundant.

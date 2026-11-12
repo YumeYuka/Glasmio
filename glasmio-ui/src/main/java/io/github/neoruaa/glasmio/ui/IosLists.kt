@@ -176,6 +176,12 @@ fun GlasmioListRowText(
     )
 }
 
+/** 列表行的图标两侧使用相同间距，面板内沿用 20dp 内容缩进。 */
+object GlasmioListRowDefaults {
+    val horizontalPadding: Dp
+        @Composable get() = if (LocalIosSheetMaterialContext.current != null) 20.dp else 16.dp
+}
+
 /** Apple's 52dp regular row and 68dp title/subtitle row. Accessories remain caller-owned slots. */
 @Composable
 fun GlasmioListRow(
@@ -248,22 +254,22 @@ fun GlasmioListRow(
     showDisclosure: Boolean = onClick != null && trailing == null,
 ) {
     val colors = LocalGlassColors.current
-    val inSheet = LocalIosSheetMaterialContext.current != null
+    val horizontalPadding = GlasmioListRowDefaults.horizontalPadding
     Row(
         modifier
             .fillMaxWidth()
             .height(if (subtitleContent == null) 52.dp else 68.dp)
             .then(if (onClick != null) Modifier.clickable(enabled = enabled, role = Role.Button, onClick = onClick) else Modifier)
-            .padding(horizontal = if (inSheet) 20.dp else 16.dp),
+            .padding(horizontal = horizontalPadding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         leading?.let {
             Box(Modifier.alpha(if (enabled) 1f else 0.4f)) { it() }
-            Spacer(Modifier.width(8.dp))
+            Spacer(Modifier.width(horizontalPadding))
         }
         systemName?.let {
             SfIcon(it, null, modifier = Modifier.alpha(if (enabled) 1f else 0.4f), size = 23.dp, tint = colors.accent)
-            Spacer(Modifier.width(12.dp))
+            Spacer(Modifier.width(horizontalPadding))
         }
         Row(
             Modifier.weight(1f).fillMaxHeight()

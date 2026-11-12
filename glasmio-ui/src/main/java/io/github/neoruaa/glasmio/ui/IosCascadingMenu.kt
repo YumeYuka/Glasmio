@@ -58,6 +58,8 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.paneTitle
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.Dp
@@ -89,6 +91,7 @@ data class GlasmioCascadingMenuItem(
     val onClick: () -> Unit = {},
     val subtitle: String? = null,
     val icon: (@Composable () -> Unit)? = null,
+    val checked: Boolean? = null,
 )
 
 /**
@@ -382,6 +385,12 @@ fun GlasmioCascadingMenu(
                                         iconTint = if (item.destructive) colors.destructive else if (useAccentIcons) colors.accent else colors.content,
                                         backdrop = childBackdrop,
                                         enabled = item.enabled,
+                                        modifier = Modifier.semantics {
+                                            item.checked?.let { toggleableState = ToggleableState(it) }
+                                        },
+                                        trailing = if (item.checked == true) {
+                                            { SfIcon("checkmark", null, size = 20.dp, tint = colors.content) }
+                                        } else null,
                                         onClick = { close(item.onClick) },
                                     )
                                 }
@@ -438,9 +447,12 @@ fun GlasmioCascadingMenu(
                         enabled = item.enabled,
                         modifier = Modifier.graphicsLayer {
                             alpha = if (selectedIndex == index) 1f - appearance.coerceIn(0f, 1f) else parentContentAlpha()
-                        }.then(if (selectedIndex != null) Modifier.semantics { hideFromAccessibility() } else Modifier),
-                        trailing = if (item.children.isEmpty()) null else {
-                            { MenuChevron(0f, collapsedDescription) }
+                        }.then(if (selectedIndex != null) Modifier.semantics { hideFromAccessibility() } else Modifier)
+                            .semantics { item.checked?.let { toggleableState = ToggleableState(it) } },
+                        trailing = when {
+                            item.children.isNotEmpty() -> { { MenuChevron(0f, collapsedDescription) } }
+                            item.checked == true -> { { SfIcon("checkmark", null, size = 20.dp, tint = colors.content) } }
+                            else -> null
                         },
                         onClick = {
                             if (item.children.isEmpty()) close(item.onClick)
@@ -451,6 +463,7 @@ fun GlasmioCascadingMenu(
                         },
                     )
                 }
+
                 CompositionLocalProvider(
                     LocalIosPopupMenuInteractive provides parentInteractive,
                     LocalMenuItemAutoNavigationDelayMillis provides if (item.children.isEmpty()) null else 500L,
